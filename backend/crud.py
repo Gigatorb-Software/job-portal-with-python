@@ -30,30 +30,32 @@ def authenticate_user(db: Session, email: str, password: str):
         return None
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to authenticate user: {str(e)}")
+
         
-        
-def create_job_seeker_profile(db: Session, js_profile: JobSeekerProfileCreate, resume: UploadFile, profile_pic: UploadFile, user_email: str):
+def create_job_seeker_profile(db: Session, js_profile: JobSeekerProfileCreate):
     # Check if user exists
-    user = db.query(UserModel).filter(UserModel.email == user_email).first()
+
+    user = db.query(UserModel).filter(UserModel.email == js_profile.user_email).first()
+    print(user)
+    user.profile_completion = True
+    print(user)
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     # Check if profile already exists for user
-    if db.query(JobSeekerProfileModel).filter(JobSeekerProfileModel.user_email == user_email).first():
+    if db.query(JobSeekerProfileModel).filter(JobSeekerProfileModel.user_email == js_profile.user_email).first():
         raise HTTPException(status_code=400, detail="Job seeker profile already exists for this user")
-
-    # Read file contents
-    resume_content = resume.file.read()
-    profile_pic_content = profile_pic.file.read()
 
     db_js_profile = JobSeekerProfileModel(
         bio=js_profile.bio,
         skills=js_profile.skills,
         experience=js_profile.experience,
         education=js_profile.education,
-        resume=resume_content,
-        profile_picture=profile_pic_content,
-        user_email=user_email
+        user_email=js_profile.user_email,
+        dob=js_profile.dob,
+        title=js_profile.title,
+        address=js_profile.address
     )
     db.add(db_js_profile)
     db.commit()
@@ -61,22 +63,19 @@ def create_job_seeker_profile(db: Session, js_profile: JobSeekerProfileCreate, r
     return db_js_profile
 
 
-def create_organization_profile(db: Session, Or_profile: OrganizationProfileCreate, logo: UploadFile, user_email: str):
-    user = db.query(UserModel).filter(UserModel.email == user_email).first()
+def create_organization_profile(db: Session, Or_profile: OrganizationProfileCreate):
+    user = db.query(UserModel).filter(UserModel.email == Or_profile.user_email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Read file contents        
-    logo_content = logo.file.read()
-
     db_or_profile = OrganizationProfileModel(
-        user_email=user_email,
+        user_email=Or_profile.user_email,
         company_name=Or_profile.company_name,
         company_description=Or_profile.company_description,
         industry=Or_profile.industry,
         website=Or_profile.website
     )
-    db.add(logo_content)
+    db.add(db_or_profile)
     db.commit()
     db.close()
     return db_or_profile

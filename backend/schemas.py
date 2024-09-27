@@ -1,9 +1,9 @@
 from pydantic import BaseModel, EmailStr, Field
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 from fastapi import UploadFile
 from models import *
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl, constr
 
 from enum import Enum  # Make sure you're importing the correct Enum
 
@@ -45,12 +45,14 @@ class Login(BaseModel):
 
 
 class JobSeekerProfileCreate(BaseModel):
-    bio: Optional[str]
-    skills: Optional[str]
-    experience: Optional[str]
-    education: Optional[str]
+    title: str
     user_email: EmailStr
-    
+    dob: Optional[date]
+    bio: Optional[str] # Optional field
+    address: Optional[str]  # Optional field
+    skills: Optional[str]  # Optional field
+    experience: Optional[str]  # Optional field
+    education: Optional[str]  # Optional field
 
 class JobSeekerProfileResponse(BaseModel):
     id: int
@@ -59,14 +61,20 @@ class JobSeekerProfileResponse(BaseModel):
     skills: Optional[str]
     experience: Optional[str]
     education: Optional[str]
-    resume: Optional[str]  # file name or URL
-    profile_picture: Optional[str]  #file name or URL
+    address: Optional[str]
+    dob: Optional[date]
 
 class OrganizationProfileCreate(BaseModel):
-    company_name: Optional[str]
-    company_description: Optional[str]
-    industry: Optional[str]
-    website: Optional[str]
+    user_email: EmailStr  # Email must be a valid email format
+    company_name: constr(max_length=100)  # Limit length to 100 characters
+    company_description: Optional[str] = None  # Optional field
+    industry: Optional[str] = None  # Optional field
+    city: Optional[str] = None  # Optional field
+    state: Optional[str] = None  # Optional field
+    country: Optional[str] = None  # Optional field
+    website: Optional[HttpUrl] = None  # Optional field with URL validation
+
+
 
 class OrganizationProfileResponse(BaseModel):
     id: int
@@ -74,7 +82,6 @@ class OrganizationProfileResponse(BaseModel):
     company_name: Optional[str]
     company_description: Optional[str]
     industry: Optional[str]
-    logo: Optional[str]  # file name or URL
     website: Optional[str]
 
 

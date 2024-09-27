@@ -1,5 +1,5 @@
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Query
-from pydantic import BaseModel
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Query, Request
+from pydantic import BaseModel, EmailStr
 from schemas import *
 from config import *
 from models import *
@@ -21,63 +21,103 @@ def create_user_endpoint(user: UserCreate, db: SessionLocal = Depends(get_db)):
 @app.post("/login/")
 def login(login: Login, db: SessionLocal = Depends(get_db)):
     user = authenticate_user(db, login.email, login.password)
-    return {"email": user.email}
+    if user.role == "job_seeeker":
+        return {"email": user.email, "role": user.role}
+    else:
+        return {"email": user.email, "role": user.role}
 
-@app.post("/job_seeker_profile/")
-def create_job_seeker_profile_endpoint(profile: JobSeekerProfileCreate, resume: UploadFile = File(), profile_pic: UploadFile = File(), db: SessionLocal = Depends(get_db)):
-    return create_job_seeker_profile(db, profile, resume, profile_pic)
+@app.post("/job_seeker_profile/", response_model=JobSeekerProfileResponse)
+def create_job_seeker_profile_endpoint(profile: JobSeekerProfileCreate, db: SessionLocal = Depends(get_db)):
+    return create_job_seeker_profile(db, profile)
 
 @app.post("/Organization_profile/")
-def create_organization_profile_endpoint( profile: OrganizationProfileCreate, logo: UploadFile, db: SessionLocal = Depends(get_db)):
-    return create_organization_profile(db, profile, logo)
+def create_organization_profile_endpoint( profile: OrganizationProfileCreate, db: SessionLocal = Depends(get_db)):
+    return create_organization_profile(db, profile)
 
 
-@app.post("/uploadfile/")
-async def upload_file(
-    user_id: int,  # Accept user_id to associate the files
-    db: Session = Depends(get_db), 
-    resume: UploadFile = File(...),  # For PDF resumes
-    profile_pic: UploadFile = File(...)  # For images (JPEG, PNG, JPG)
+@app.post("/upload/")
+async def upload_files(
+    user_email: str, 
+    user_role: str,  
+    request: Request, 
+    db: Session = Depends(get_db)
 ):
-    # Read the resume content as binary
-    resume_content = await resume.read()
-    
-    # Save the resume in the database
-    db_resume = FileModel(
-        user_id=user_id,  # Associate with user
-        filename=resume.filename,
-        content_type=resume.content_type,
-        file_content=resume_content,
-        file_type="resume"
-    )
-    db.add(db_resume)
+    # Allowed content types
+    allowed_image_types = ["image/jpeg", "image/png", "image/jpg"]
+    allowed_pdf_type = "application/pdf"
+    max_file_size = 5 * 1024 * 1024  # 5 MB
 
-    # Read the profile picture content as binary
-    profile_pic_content = await profile_pic.read()
-    
-    # Save the profile picture in the database
-    db_profile_pic = FileModel(
-        user_id=user_id,  # Associate with user
-        filename=profile_pic.filename,
-        content_type=profile_pic.content_type,
-        file_content=profile_pic_content,
-        file_type="profile_pic"
-    )
-    db.add(db_profile_pic)
+    form = await request.form()
+    profile_picture: UploadFile = form.get("profile_picture")
+    resume: Optional[UploadFile] = form.get("resume")
 
-    # Commit both attachments to the database
+    if user_role == "organization":
+        # Organizations can only upload a profile picture (logo)
+        if profile_picture.content_type not in allowed_image_types:
+            raise HTTPException(status_code=400, detail="Invalid logo format. Only JPEG, PNG, JPG allowed.")
+
+        # Read file content for the logo
+        profile_picture_content = await profile_picture.read()
+        if len(profile_picture_content) > max_file_size:
+            raise HTTPException(status_code=400, detail="Logo size exceeds 5 MB.")
+
+        # Save the logo (profile picture) in the database
+        logo_record = FileModel(
+            user_email=user_email,
+            filename=profile_picture.filename,
+            content_type=profile_picture.content_type,
+            file_type="company_logo",  
+            file_content=profile_picture_content
+        )
+        db.add(logo_record)
+
+    elif user_role == "job_seeker":
+        # Job seekers must upload a profile picture, and optionally a resume
+        if profile_picture.content_type not in allowed_image_types:
+            raise HTTPException(status_code=400, detail="Invalid image format. Only JPEG, PNG, JPG allowed.")
+
+        # Read and save profile picture
+        profile_picture_content = await profile_picture.read()
+        if len(profile_picture_content) > max_file_size:
+            raise HTTPException(status_code=400, detail="Profile picture size exceeds 5 MB.")
+
+        profile_picture_record = FileModel(
+            user_email=user_email,
+            filename=profile_picture.filename,
+            content_type=profile_picture.content_type,
+            file_type="profile_picture",
+            file_content=profile_picture_content
+        )
+        db.add(profile_picture_record)
+
+        # If a resume is uploaded, validate and store it
+        if resume:
+            if resume.content_type != allowed_pdf_type:
+                raise HTTPException(status_code=400, detail="Invalid resume format. Only PDF allowed.")
+            
+            resume_content = await resume.read()
+            if len(resume_content) > max_file_size:
+                raise HTTPException(status_code=400, detail="Resume size exceeds 5 MB.")
+            
+            resume_record = FileModel(
+                user_email=user_email,
+                filename=resume.filename,
+                content_type=resume.content_type,
+                file_type="resume",
+                file_content=resume_content
+            )
+            db.add(resume_record)
+
+    else:
+        raise HTTPException(status_code=400, detail="Invalid user role. Must be 'job_seeker' or 'organization'.")
+
+    # Commit changes to the database
     db.commit()
-    
-    # Refresh to get updated records
-    db.refresh(db_resume)
-    db.refresh(db_profile_pic)
 
-    return {
-        "resume": {"filename": db_resume.filename, "file_type": db_resume.file_type},
-        "profile_pic": {"filename": db_profile_pic.filename, "file_type": db_profile_pic.file_type}
-    }
+    return {"message": "Files uploaded successfully"}
 
-@app.get("/files/{file_id}")
+
+@app.get("/files_download/{file_id}")
 async def download_file(file_id: int, db: Session = Depends(get_db)):
     # Retrieve file from the database
     db_file = db.query(FileModel).filter(FileModel.id == file_id).first()  # Use FileModel
