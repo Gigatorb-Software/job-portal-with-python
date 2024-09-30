@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Query, Request
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Query, Request, status
 from pydantic import BaseModel, EmailStr
 from schemas import *
 from config import *
@@ -7,12 +7,22 @@ from crud import *
 from io import BytesIO
 from fastapi.responses import StreamingResponse
 import PyPDF2
+from fastapi.middleware.cors import CORSMiddleware
 
 obj = UserModel
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Job Recruitment")
+
+# Enable CORS to allow requests from your React app
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # React app's URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/user/", response_model=UserResponse)
 def create_user_endpoint(user: UserCreate, db: SessionLocal = Depends(get_db)):
@@ -22,9 +32,9 @@ def create_user_endpoint(user: UserCreate, db: SessionLocal = Depends(get_db)):
 def login(login: Login, db: SessionLocal = Depends(get_db)):
     user = authenticate_user(db, login.email, login.password)
     if user.role == "job_seeeker":
-        return {"email": user.email, "role": user.role}
+        return {"email": user.email, "role": user.role, "profile_completion": user.profile_completion}
     else:
-        return {"email": user.email, "role": user.role}
+        return {"email": user.email, "role": user.role, "profile_completion": user.profile_completion}
 
 @app.post("/job_seeker_profile/", response_model=JobSeekerProfileResponse)
 def create_job_seeker_profile_endpoint(profile: JobSeekerProfileCreate, db: SessionLocal = Depends(get_db)):
@@ -33,7 +43,6 @@ def create_job_seeker_profile_endpoint(profile: JobSeekerProfileCreate, db: Sess
 @app.post("/Organization_profile/")
 def create_organization_profile_endpoint( profile: OrganizationProfileCreate, db: SessionLocal = Depends(get_db)):
     return create_organization_profile(db, profile)
-
 
 @app.post("/upload/")
 async def upload_files(
@@ -116,7 +125,6 @@ async def upload_files(
 
     return {"message": "Files uploaded successfully"}
 
-
 @app.get("/files_download/{file_id}")
 async def download_file(file_id: int, db: Session = Depends(get_db)):
     # Retrieve file from the database
@@ -183,3 +191,49 @@ async def open_resume(file_id: int, db: Session = Depends(get_db)):
 
     # Return the StreamingResponse with the correct media type
     return StreamingResponse(file_like, media_type="application/pdf", headers=headers)
+
+
+@app.post("/job_posts/", response_model=JobPostResponseSchema)
+def create_job_post(job_post: JobPostCreateSchema, email: EmailStr, role: str, profile_completion: bool, db: Session = Depends(get_db)):
+        # Check if user is an organization and profile is complete
+    if role != "organization" or not profile_completion:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Only organizations with complete profiles can post jobs"
+        )
+    # Create new job post
+    new_job_post = JobPostModel(
+        posted_by=email,
+        job_title=job_post.job_title,
+        description=job_post.description,
+        skills=job_post.skills,
+        salary=job_post.salary,
+        experience=job_post.experience,
+        positions=job_post.positions,
+        location=job_post.location,
+        education=job_post.education
+    )
+    # Add and commit new job post to database
+    db.add(new_job_post)
+    db.commit()
+    db.refresh(new_job_post)
+    return new_job_post
+
+
+@app.get("/jobs/")
+def get_all_jobs(db: Session = Depends(get_db)):
+    jobs = db.query(JobPostModel).all()
+    return jobs
+
+
+@app.get("/posted_by_organization/")
+def jobs_posted_by_organization(email: EmailStr, db: Session = Depends(get_db)):
+    organization_jobs = db.query(JobPostModel).filter(JobPostModel.posted_by == email).all()
+    if not organization_jobs:
+        raise HTTPException(status_code=404, detail="No job posts found for this organization")
+    return organization_jobs
+
+
+
+
+

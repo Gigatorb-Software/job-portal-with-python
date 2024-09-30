@@ -27,7 +27,7 @@ def authenticate_user(db: Session, email: str, password: str):
         user = db.query(UserModel).filter(UserModel.email == email).first()
         if user and pwd_context.verify(password, user.password):
             return user  # Return the user object
-        return None
+        return HTTPException(status_code=500, detail=f"user not found: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to authenticate user: {str(e)}")
 
@@ -36,9 +36,9 @@ def create_job_seeker_profile(db: Session, js_profile: JobSeekerProfileCreate):
     # Check if user exists
 
     user = db.query(UserModel).filter(UserModel.email == js_profile.user_email).first()
-    print(user)
-    user.profile_completion = True
-    print(user)
+
+    if user: 
+        user.profile_completion = True
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -65,6 +65,9 @@ def create_job_seeker_profile(db: Session, js_profile: JobSeekerProfileCreate):
 
 def create_organization_profile(db: Session, Or_profile: OrganizationProfileCreate):
     user = db.query(UserModel).filter(UserModel.email == Or_profile.user_email).first()
+    if user: 
+        user.profile_completion = True
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 

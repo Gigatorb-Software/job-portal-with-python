@@ -1,20 +1,21 @@
 from sqlalchemy import create_engine
 import os
 from dotenv import load_dotenv
-# import urllib.parse
+import urllib.parse
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
+
 
 load_dotenv()
 
 username = os.getenv("username")
 password = os.getenv("password")
-# password = urllib.parse.quote(password)
+password = urllib.parse.quote(password)
 port = os.getenv("port")
-database = os.getenv("database")    
+database = os.getenv("database")
 host = os.getenv("host")
 
-DATABASE_URL = "mysql+pymysql://root:root@localhost:3306/job_portal"
+DATABASE_URL = f"mysql+pymysql://{username}:{password}@{host}:{port}/{database}"
 
 # Create the SQLAlchemy engine
 engine = create_engine(DATABASE_URL)
