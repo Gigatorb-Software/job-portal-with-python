@@ -42,7 +42,7 @@ def create_job_seeker_profile_endpoint(profile: JobSeekerProfileCreate, db: Sess
 
 
 @app.post("/Organization_profile/", response_model=OrganizationProfileResponse)
-def create_organization_profile_endpoint( profile: OrganizationProfileCreate, db: SessionLocal = Depends(get_db)):
+def create_organization_profile_endpoint(profile: OrganizationProfileCreate, db: SessionLocal = Depends(get_db)):
     return create_organization_profile(db, profile)
 
 
