@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from passlib.context import CryptContext
+from typing import Dict
 
 pwd_context = CryptContext(schemes=["bcrypt"], default="bcrypt")
 
@@ -82,3 +83,37 @@ def create_organization_profile(db: Session, Or_profile: OrganizationProfileCrea
     db.commit()
     db.close()
     return db_or_profile
+
+
+def apply_to_job(db: Session, application_data: ApplicationCreateSchema) -> Dict:
+    try:
+        # Retrieve job post details
+        job_post = db.query(JobPostModel).filter(JobPostModel.job_id == application_data.job_id).first()
+        if job_post is None:
+            raise ValueError("Job post not found")
+        # Retrieve applicant's resume
+        resume = db.query(FileModel).filter(FileModel.user_email == application_data.job_seeker_email, 
+                                            FileModel.file_type == 'resume').first()
+        # Create job application
+        applicant_data = JobApplicationModel(
+            job_seeker_email=application_data.job_seeker_email,
+            job_id=application_data.job_id,
+            resume_id=resume.id if resume else None
+        )
+        print(applicant_data)
+        # Add and commit application data
+
+        db.add(applicant_data)
+        db.commit()
+        db.close()
+        # Return application data with company name
+        return {
+            **applicant_data.__dict__,
+            'company_name': job_post.company_name
+        }
+    except Exception as e:
+        # Handle exceptions (e.g., log error, rollback database changes)
+        print(f"Error applying to job: {str(e)}")
+        return None
+
+
