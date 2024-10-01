@@ -81,12 +81,11 @@ class OrganizationProfileUpdate(BaseModel):
 
 
 class OrganizationProfileResponse(BaseModel):
-    id: int
     user_email: str
     company_name: Optional[str]
     company_description: Optional[str]
     industry: Optional[str]
-    website: Optional[str]
+    website: Optional[HttpUrl] = None
 
 class FileCreate(BaseModel):
     filename: str

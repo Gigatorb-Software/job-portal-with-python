@@ -68,20 +68,21 @@ def create_organization_profile(db: Session, Or_profile: OrganizationProfileCrea
     user = db.query(UserModel).filter(UserModel.email == Or_profile.user_email).first()
     if user: 
         user.profile_completion = True
-
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
     db_or_profile = OrganizationProfileModel(
         user_email=Or_profile.user_email,
         company_name=Or_profile.company_name,
         company_description=Or_profile.company_description,
         industry=Or_profile.industry,
+        city=Or_profile.city,
+        state=Or_profile.state,
+        country=Or_profile.country,
         website=Or_profile.website
     )
     db.add(db_or_profile)
     db.commit()
-    db.close()
+    db.refresh(db_or_profile)
     return db_or_profile
 
 
