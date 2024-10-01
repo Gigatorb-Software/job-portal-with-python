@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Query, Request, status
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Query, Request,Form, status
 from pydantic import BaseModel, EmailStr
 from schemas import *
 from config import *
@@ -40,25 +40,24 @@ def login(login: Login, db: SessionLocal = Depends(get_db)):
 def create_job_seeker_profile_endpoint(profile: JobSeekerProfileCreate, db: SessionLocal = Depends(get_db)):
     return create_job_seeker_profile(db, profile)
 
-@app.post("/Organization_profile/")
+
+@app.post("/Organization_profile/", response_model=OrganizationProfileResponse)
 def create_organization_profile_endpoint( profile: OrganizationProfileCreate, db: SessionLocal = Depends(get_db)):
     return create_organization_profile(db, profile)
 
+
 @app.post("/upload/")
 async def upload_files(
-    user_email: str, 
-    user_role: str,  
-    request: Request, 
+    user_email: str = Form(...),
+    user_role: str = Form(...),
+    profile_picture: UploadFile = File(...),
+    resume: UploadFile = File(None),  # Optional file upload
     db: Session = Depends(get_db)
 ):
     # Allowed content types
     allowed_image_types = ["image/jpeg", "image/png", "image/jpg"]
     allowed_pdf_type = "application/pdf"
     max_file_size = 5 * 1024 * 1024  # 5 MB
-
-    form = await request.form()
-    profile_picture: UploadFile = form.get("profile_picture")
-    resume: Optional[UploadFile] = form.get("resume")
 
     if user_role == "organization":
         # Organizations can only upload a profile picture (logo)
@@ -75,7 +74,7 @@ async def upload_files(
             user_email=user_email,
             filename=profile_picture.filename,
             content_type=profile_picture.content_type,
-            file_type="company_logo",  
+            file_type="company_logo",
             file_content=profile_picture_content
         )
         db.add(logo_record)
@@ -103,11 +102,11 @@ async def upload_files(
         if resume:
             if resume.content_type != allowed_pdf_type:
                 raise HTTPException(status_code=400, detail="Invalid resume format. Only PDF allowed.")
-            
+
             resume_content = await resume.read()
             if len(resume_content) > max_file_size:
                 raise HTTPException(status_code=400, detail="Resume size exceeds 5 MB.")
-            
+
             resume_record = FileModel(
                 user_email=user_email,
                 filename=resume.filename,
@@ -193,17 +192,19 @@ async def open_resume(file_id: int, db: Session = Depends(get_db)):
     return StreamingResponse(file_like, media_type="application/pdf", headers=headers)
 
 
-@app.post("/job_posts/", response_model=JobPostResponseSchema)
-def create_job_post(job_post: JobPostCreateSchema, email: EmailStr, role: str, profile_completion: bool, db: Session = Depends(get_db)):
+@app.post("/job_posts/")
+def create_job_post(job_post: JobPostCreateSchema, db: Session = Depends(get_db)):
+    job_post_detail = db.query(OrganizationProfileModel).filter(OrganizationProfileModel.user_email == job_post.email).first()
         # Check if user is an organization and profile is complete
-    if role != "organization" or not profile_completion:
+    if job_post.role != "organization" or not job_post.profile_completion:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail="Only organizations with complete profiles can post jobs"
         )
     # Create new job post
     new_job_post = JobPostModel(
-        posted_by=email,
+        company_name = job_post_detail.company_name,
+        posted_by=job_post.email,
         job_title=job_post.job_title,
         description=job_post.description,
         skills=job_post.skills,
@@ -234,6 +235,42 @@ def jobs_posted_by_organization(email: EmailStr, db: Session = Depends(get_db)):
     return organization_jobs
 
 
+@app.get("/jobs/{id}", response_model=JobPostResponseSchema)
+def get_job_by_id(id: int, db: Session = Depends(get_db)) -> dict:
+    job = db.query(JobPostModel).filter(JobPostModel.job_id == id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")  
+    return job
+
+@app.post("/apply/")
+def apply_to_job_endpoint(applicant: ApplicationCreateSchema, db: Session = Depends(get_db)):
+    return apply_to_job(db, applicant)
 
 
+@app.get("/get_applicants/")
+def get_applicant_by_job_id(job_id: int, db: Session = Depends(get_db)):
+    applicants = db.query(JobApplicationModel).filter(JobApplicationModel.job_id == job_id).all()
+    return applicants
+
+@app.put("/update_status")
+def update_application_status(
+    job_id: int, 
+    job_seeker_email: EmailStr, 
+    status_update: StatusUpdateRequest, 
+    db: Session = Depends(get_db)
+):
+    # Retrieve the specific job application
+    application = db.query(JobApplicationModel).filter(
+        JobApplicationModel.job_id == job_id,
+        JobApplicationModel.job_seeker_email == job_seeker_email
+    ).first()
+    # If no application is found, raise an exception
+    if not application:
+        raise HTTPException(status_code=404, detail="Job application not found")
+    # Update the status of the application
+    application.status = status_update.status
+    # Commit the changes to the database
+    db.commit()
+    db.refresh(application)
+    return {"message": "Application status updated successfully", "application": application}
 

@@ -71,6 +71,15 @@ class OrganizationProfileCreate(BaseModel):
     country: Optional[str] = None  # Optional field
     website: Optional[HttpUrl] = None  # Optional field with URL validation
 
+class OrganizationProfileUpdate(BaseModel):
+    company_description: Optional[str] = None  # Optional field
+    # industry: Optional[str] = None  # Optional field
+    city: Optional[str] = None  # Optional field
+    state: Optional[str] = None  # Optional field
+    country: Optional[str] = None  # Optional field
+    website: Optional[HttpUrl] = None  # Optional field with URL validation
+
+
 class OrganizationProfileResponse(BaseModel):
     id: int
     user_email: str
@@ -85,19 +94,19 @@ class FileCreate(BaseModel):
     class Config:
         from_attributes = True
 
-# Enum for experience level
-class ExperienceLevelEnum(str, Enum):
-    zero_to_one = "0-1 year"
-    one_to_two = "1-2 years"
-    two_to_five = "2-5 years"
-    five_plus = "5+ years"
+# # Enum for experience level
+# class ExperienceLevelEnum(str, Enum):
+#     zero_to_one = "0-1 year"
+#     one_to_two = "1-2 years"
+#     two_to_five = "2-5 years"
+#     five_plus = "5+ years"
 
-# Enum for education level
-class EducationLevelEnum(str, Enum):
-    high_school = "High School"
-    bachelors = "Bachelor's"
-    masters = "Master's"
-    phd = "Ph.D."
+# # Enum for education level
+# class EducationLevelEnum(str, Enum):
+#     high_school = "High School"
+#     bachelors = "Bachelor's"
+#     masters = "Master's"
+#     phd = "Ph.D."
 
 # Pydantic schema for JobPostModel
 class JobPostCreateSchema(BaseModel):
@@ -105,20 +114,23 @@ class JobPostCreateSchema(BaseModel):
     description: str
     skills: Optional[str]
     salary: Optional[str]
-    experience: ExperienceLevelEnum
+    experience: str
     positions: int
     location: str
-    education: EducationLevelEnum
+    education: str
+    email: EmailStr
+    role: str
+    profile_completion: bool
 
 class JobPostUpdateSchema(BaseModel):
     job_title: Optional[str] = Field(None, max_length=100)
     description: Optional[str]
-    skills: Optional[str]
+    skills: Optional[str] 
     salary: Optional[str]
-    experience: Optional[ExperienceLevelEnum]
+    experience: Optional[str]
     positions: Optional[int]
     location: Optional[str]
-    education: Optional[EducationLevelEnum]
+    education: Optional[str]
     active: Optional[bool] = True
 
 class JobPostResponseSchema(BaseModel):
@@ -128,13 +140,29 @@ class JobPostResponseSchema(BaseModel):
     description: str
     skills: Optional[str]
     salary: Optional[str]
-    experience: ExperienceLevelEnum
+    experience: Optional[str]
     positions: int
-    location: str
-    education: EducationLevelEnum
+    location: Optional[str]
+    education: Optional[str]
     created_at: datetime
     updated_at: datetime
     active: bool
 
     class Config:
         from_attributes = True
+
+class ApplicationStatus(str, Enum):
+    pending='pending'
+    accepted='accepted'
+    rejected='rejected'
+
+class ApplicationCreateSchema(BaseModel):
+    job_id: int
+    job_seeker_email: EmailStr
+    status: ApplicationStatus = ApplicationStatus.pending
+    class Config:
+        from_attributes = True
+
+
+class StatusUpdateRequest(BaseModel):
+    status: str

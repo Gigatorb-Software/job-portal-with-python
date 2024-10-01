@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 from sqlalchemy.dialects.mysql import LONGBLOB 
+import pytz
 
 Base = declarative_base()
 
@@ -41,15 +42,14 @@ class JobSeekerProfileModel(Base):
     skills = Column(Text, nullable=True)  # Optional field
     experience = Column(String(100), nullable=True)  # Optional field
     education = Column(String(100), nullable=True)  # Optional field
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')), onupdate=lambda: datetime.now(pytz.timezone('Asia/Kolkata')))
 
     user = relationship("UserModel", backref="job_seeker_profile", cascade="all, delete")
 
-# OrganizationProfileModel
 class OrganizationProfileModel(Base):
     __tablename__ = "organization_profiles"
-    
+
     user_email = Column(String(100), ForeignKey("users.email"), index=True)
     company_name = Column(String(100), primary_key=True, index=True)
     company_description = Column(Text, nullable=True)  # Optional field
@@ -58,34 +58,30 @@ class OrganizationProfileModel(Base):
     state = Column(String(100), nullable=True)  # Optional field
     country = Column(String(100), nullable=True)  # Optional field
     website = Column(String(100), nullable=True)  # Optional field
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')), onupdate=lambda: datetime.now(pytz.timezone('Asia/Kolkata')))
 
-    user = relationship("UserModel", backref="organization_profile", cascade="all, delete")
+    user = relationship("UserModel", backref="organization", cascade="all, delete")
+    posts = relationship("JobPostModel", backref="organization", cascade="all, delete")
 
-# JobPostModel
+
 class JobPostModel(Base):
     __tablename__ = "job_posts"
 
     job_id = Column(Integer, primary_key=True, index=True)
     posted_by = Column(String(100), ForeignKey("organization_profiles.user_email"), index=True)
+    company_name = Column(String(100), nullable=False)
     job_title = Column(String(100), unique=True, nullable=False)
     description = Column(Text, nullable=False)
+    positions = Column(Integer, nullable=False)
+    location = Column(String(100), nullable=False)  # Optional field
     skills = Column(Text, nullable=True)  # Optional field
     salary = Column(String(100), nullable=True)  # Optional field
-    
-    # Experience level enum
-    experience = Column(Enum('0-1 year', '1-2 years', '2-5 years', '5+ years', name='experience_level'), nullable=False)
-    positions = Column(Integer, nullable=False)
-    location = Column(String(100), nullable=False)
-    
-    # Education level enum
-    education = Column(Enum('High School', 'Bachelor\'s', 'Master\'s', 'Ph.D.', name='education_level'), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    active = Column(Boolean, default=True)
+    experience = Column(String(100), nullable=True)
+    education = Column(String(100), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')), onupdate=lambda: datetime.now(pytz.timezone('Asia/Kolkata')))
 
-    organization = relationship("OrganizationProfileModel", backref="job_posts", cascade="all, delete")
 
 # FileModel
 class FileModel(Base):
@@ -105,5 +101,26 @@ class FileModel(Base):
         CheckConstraint("file_type IN ('resume', 'profile_picture', 'company_logo')", name='check_file_type'),
     )
     user = relationship("UserModel", backref="files", cascade="all, delete")
+
+
+class JobApplicationModel(Base):
+    __tablename__ = "job_applications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_seeker_email = Column(String(100), ForeignKey("users.email"), index=True, nullable=False)
+    job_id = Column(Integer, ForeignKey("job_posts.job_id"), index=True, nullable=False)
+    resume_id = Column(Integer, ForeignKey("files.id"), index=True, nullable=True)
+    status = Column(Enum('pending', 'accepted', 'rejected', name='application_status'), default='pending', nullable=False)
+    applyied_at = Column(DateTime(timezone=True), default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')))
+
+    # Relationship with the user (job seeker)
+    job_seeker = relationship("UserModel", backref="applications", cascade="all, delete")
+    # Relationship with the job post
+    job_post = relationship("JobPostModel", backref="applications", cascade="all, delete")
+    # Relationship with the resume file
+    resume = relationship("FileModel", backref="applications", cascade="all, delete")
+
+
+
 
 
